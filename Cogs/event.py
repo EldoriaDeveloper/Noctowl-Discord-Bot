@@ -24,14 +24,14 @@ async def fetch_channels_from_category(bot):
         
         # Get all text channels in the category
         text_channels = [channel for channel in category.channels if isinstance(channel, discord.TextChannel)]
-        globals.log_message(message=f"[HarperBot] Found {len(text_channels)} text channels in category")
+        globals.log_message(message=f"Found {len(text_channels)} text channels in category")
         return text_channels
         
     except Exception as e:
         globals.log_message(error=e)
         return []
 
-class QuestionModal(discord.ui.Modal, title="Harper Question Response"):
+class QuestionModal(discord.ui.Modal, title="Question Response"):
     def __init__(self, question: dict):
         super().__init__(timeout=None)
         self.question_text = question["question"]
@@ -76,7 +76,7 @@ class QuestionModal(discord.ui.Modal, title="Harper Question Response"):
                 item.disabled = True
             await interaction.message.edit(view=view)
         
-            globals.log_message(message=f"[HarperBot] {interaction.user} answered question ID {self.id}: {self.answer.value}")
+            globals.log_message(message=f"{interaction.user} answered question ID {self.id}: {self.answer.value}")
         except Exception as e:
             globals.log_message(error=e)
 
@@ -130,7 +130,7 @@ class ValidationView(discord.ui.View):
             item.disabled = True
         await interaction.message.edit(view=self)
         
-        globals.log_message(message=f"[HarperBot] {interaction.user} marked answer {self.answer_index} as wrong for user {self.user_id} - 1 point awarded")
+        globals.log_message(message=f"{interaction.user} marked answer {self.answer_index} as wrong for user {self.user_id} - 1 point awarded")
 
 
 class PointSelectionView(discord.ui.View):
@@ -192,7 +192,7 @@ class PointSelectionView(discord.ui.View):
         except:
             pass
         
-        globals.log_message(message=f"[HarperBot] {interaction.user} marked answer {self.answer_index} as correct for user {self.user_id} - {points} points awarded")
+        globals.log_message(message=f"{interaction.user} marked answer {self.answer_index} as correct for user {self.user_id} - {points} points awarded")
 
 
 class PaginationView(discord.ui.View):
@@ -236,6 +236,7 @@ class QuestionCog(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
         self.questions_sent = 0  # Fixed: Made it an instance variable
+        self.asked_questions = []
         self.questions = {
             ## ECONOMY
             1: "A member claims they lost 50k currency due to a bot glitch. They have proof via screenshot. How would you handle this?",
@@ -357,11 +358,19 @@ class QuestionCog(commands.Cog):
         
         # Randomly select a channel from the category
         channel = random.choice(channels)
-        globals.log_message(message=f"[HarperBot] Selected channel: {channel.name} for question")
+        globals.log_message(message=f"Selected channel: {channel.name} for question")
 
-        question_id = random.choice(list(self.questions.keys()))
+        available_questions = list(set(self.questions.keys()) - set(self.asked_questions))
+
+        if not available_questions:
+            # All questions have been asked
+            self.question_task.stop()
+            globals.log_message(message="All questions have been asked. Stopping task.")
+            return
+
+        question_id = random.choice(available_questions)
+        self.asked_questions.append(question_id)
         question_text = self.questions[question_id]
-        self.questions.pop(question_id)
         question_data = {
             "id": question_id,
             "question": question_text
@@ -385,12 +394,12 @@ class QuestionCog(commands.Cog):
         await channel.send(embed=embed, view=view)
         
         self.questions_sent += 1  # Fixed: Use self.questions_sent
-        globals.log_message(message=f"[HarperBot] Sent question {self.questions_sent}/{TOTAL_QUESTIONS}")
+        globals.log_message(message=f"Sent question {self.questions_sent}/{TOTAL_QUESTIONS}")
         
         # Check if we've sent all questions AFTER sending
         if self.questions_sent >= TOTAL_QUESTIONS:
             self.question_task.stop()
-            globals.log_message(message=f"[HarperBot] Reached {TOTAL_QUESTIONS} questions. Stopping task.")
+            globals.log_message(message=f"Reached {TOTAL_QUESTIONS} questions. Stopping task.")
             return
         
         # Change interval for next iteration
